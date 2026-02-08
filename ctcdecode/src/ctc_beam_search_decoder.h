@@ -102,7 +102,7 @@ public:
                size_t cutoff_top_n, size_t blank_id, int log_input, Scorer *ext_scorer, size_t num_groups,
                float_t diversity_factor);
 
-  ~DecoderState() = default;
+  ~DecoderState();
 
   /* Process logits in decoder stream
    *

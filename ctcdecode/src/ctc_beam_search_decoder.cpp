@@ -218,6 +218,12 @@ DecoderState::decode() const {
   return get_beam_search_result(prefixes, beam_size);
 }
 
+DecoderState::~DecoderState() {
+    for (auto *root : roots) {
+        delete root;
+    }
+}
+
 std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
     const std::vector<std::vector<double>> &probs_seq,
     const std::vector<std::string> &vocabulary,
