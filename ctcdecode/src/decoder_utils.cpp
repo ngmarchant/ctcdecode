@@ -131,8 +131,8 @@ bool prefix_compare(const PathTrie *x, const PathTrie *y) {
 }
 
 bool prefix_compare_diversity(const PathTrie *x, const PathTrie *y) {
-  float x_score = log_sum_exp(x->score, x->diversity_bonus);
-  float y_score = log_sum_exp(y->score, y->diversity_bonus);
+  float x_score = x->score+ x->diversity_bonus;
+  float y_score = y->score + y->diversity_bonus;
   if (x_score == y_score) {
     return prefix_compare(x, y);
   } else {

@@ -163,7 +163,7 @@ void DecoderState::beam_step(const std::vector<std::vector<double>> &probs_seq, 
           distance += prefix->character != other->character;
         }
       }
-      prefix->diversity_bonus = log(distance * diversity_factor / group);
+      prefix->diversity_bonus = distance * diversity_factor / group;
     }
   }
 
