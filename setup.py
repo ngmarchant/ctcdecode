@@ -7,8 +7,7 @@ import urllib.request
 import warnings
 
 from setuptools import setup, find_packages, distutils
-from torch.utils.cpp_extension import BuildExtension
-from torch.utils.cpp_extension import CppExtension, include_paths
+from torch.utils.cpp_extension import BuildExtension, CppExtension, include_paths
 
 
 def download_extract(url, dl_path):
@@ -43,7 +42,7 @@ def compile_test(header, library):
 
 
 # TODO: -g is the debug flag, remove it once decoder is stable
-compile_args = ['-Og', '-DKENLM_MAX_ORDER=6', '-std=c++14', '-fPIC', '-g']
+compile_args = ['-O3', '-DKENLM_MAX_ORDER=6', '-std=c++17', '-fPIC']
 ext_libs = []
 if compile_test('zlib.h', 'z'):
     compile_args.append('-DHAVE_ZLIB')
@@ -93,7 +92,7 @@ def parallelCCompile(self,
     macros, objects, extra_postargs, pp_opts, build = self._setup_compile(
         output_dir, macros, include_dirs, sources, depends, extra_postargs)
     cc_args = self._get_cc_args(pp_opts, debug, extra_preargs)
-
+    
     # parallel code
     def _single_compile(obj):
         try:
@@ -112,12 +111,6 @@ def parallelCCompile(self,
 distutils.ccompiler.CCompiler.compile = parallelCCompile
 
 setup(
-    name="ctcdecode",
-    version="1.0.2",
-    description="CTC Decoder for PyTorch based on Paddle Paddle's implementation",
-    url="https://github.com/parlance/ctcdecode",
-    author="Ryan Leary",
-    author_email="ryanleary@gmail.com",
     # Exclude the build files.
     packages=find_packages(exclude=["build"]),
     ext_modules=[extension],

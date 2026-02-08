@@ -1,0 +1,25 @@
+[build-system]
+# These are required to even start the installation process
+requires = ["setuptools", "wheel", "torch>=2.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctcdecode"
+version = "1.0.4"
+description = "CTC Decoder for PyTorch based on Paddle Paddle's implementation"
+authors = [
+    {name = "Ryan Leary", email = "ryanleary@gmail.com"},
+    {name = "Simen Burud", email = "simen.burud@gmail.com"},
+    {name = "Neil Marchant", email = "ngmarchant@gmail.com"},
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=2.0",
+]
+
+[project.urls]
+"Repository" = "https://github.com/ngmarchant/ctcdecode"
+
+[tool.setuptools]
+packages = ["ctcdecode"]
