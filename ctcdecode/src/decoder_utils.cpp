@@ -20,12 +20,13 @@ std::vector<std::pair<size_t, float>> get_pruned_log_probs(
     std::sort(
         prob_idx.begin(), prob_idx.end(), pair_comp_second_rev<int, double>);
     if (log_cutoff_prob < 0.0) {
-      double cum_prob = 0.0;
+      double cum_log_prob = -NUM_FLT_INF;
       cutoff_len = 0;
       for (size_t i = 0; i < prob_idx.size(); ++i) {
-        cum_prob = log_sum_exp(cum_prob, log_input ? prob_idx[i].second : log(prob_idx[i].second));
+        double log_prob_i = log_input ? prob_idx[i].second : log(prob_idx[i].second + NUM_FLT_MIN);
+        cum_log_prob = log_sum_exp(cum_log_prob, log_prob_i);
         cutoff_len += 1;
-        if (cum_prob >= cutoff_prob || cutoff_len >= cutoff_top_n) break;
+        if (cum_log_prob >= log_cutoff_prob || cutoff_len >= cutoff_top_n) break;
       }
     } else {
       cutoff_len = cutoff_top_n;
