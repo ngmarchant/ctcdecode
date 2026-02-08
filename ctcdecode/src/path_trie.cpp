@@ -36,6 +36,10 @@ PathTrie::~PathTrie() {
   for (auto child : children_) {
     delete child.second;
   }
+  // Delete the dictionary if this is the root node
+  if (parent == nullptr && dictionary_ != nullptr) {
+      delete dictionary_;
+  }
 }
 
 PathTrie *PathTrie::get_path_trie(int new_char, int new_timestep, float cur_log_prob_c, bool reset) {
