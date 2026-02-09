@@ -53,6 +53,7 @@ beam_results, beam_scores, timesteps, out_lens = decoder.decode(output)
  - `num_groups` Number of groups, as in Diverse Beam Search (Vijayakumar et al). One is equivalent to standard beam search.
  - `diversity_factor` How much to prioritize exploration of the search space (vs. exploitation). Zero is equivalent to standard beam search.
  - `blank_id` This should be the index of the CTC blank token (probably 0). 
+ - `sil_id` Index corresponding to the CTC silence token (a.k.a. word separator token).
  - `log_probs_input` If your outputs have passed through a softmax and represent probabilities, this should be false, if they passed through a LogSoftmax and represent negative log likelihood, you need to pass True. If you don't understand this, run `print(output[0][0].sum())`, if it's a negative number you've probably got NLL and need to pass True, if it sums to ~1.0 you should pass False. Default False.
 
 ### Inputs to the `decode` method

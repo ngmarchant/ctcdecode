@@ -43,6 +43,7 @@ int beam_decode(at::Tensor th_probs,
                 double cutoff_prob,
                 size_t cutoff_top_n,
                 size_t blank_id,
+                int sil_id,
                 bool log_input,
                 void *scorer,
                 at::Tensor th_output,
@@ -76,7 +77,7 @@ int beam_decode(at::Tensor th_probs,
     }
 
     std::vector<std::vector<std::pair<double, Output>>> batch_results =
-    ctc_beam_search_decoder_batch(inputs, new_vocab, beam_size, num_processes, cutoff_prob, cutoff_top_n, blank_id, log_input, ext_scorer, num_groups, diversity_factor);
+    ctc_beam_search_decoder_batch(inputs, new_vocab, beam_size, num_processes, cutoff_prob, cutoff_top_n, blank_id, sil_id, log_input, ext_scorer, num_groups, diversity_factor);
     auto outputs_accessor = th_output.accessor<int, 3>();
     auto timesteps_accessor =  th_timesteps.accessor<int, 3>();
     auto scores_accessor =  th_scores.accessor<float, 2>();
@@ -112,6 +113,7 @@ int paddle_beam_decode(at::Tensor th_probs,
                        double cutoff_prob,
                        size_t cutoff_top_n,
                        size_t blank_id,
+                       int sil_id,
                        int log_input,
                        at::Tensor th_output,
                        at::Tensor th_timesteps,
@@ -119,7 +121,7 @@ int paddle_beam_decode(at::Tensor th_probs,
                        at::Tensor th_out_length){
 
     return beam_decode(th_probs, th_seq_lens, labels, vocab_size, beam_size, num_processes, num_groups,diversity_factor,
-                cutoff_prob, cutoff_top_n, blank_id, log_input, NULL, th_output, th_timesteps, th_scores, th_out_length);
+                cutoff_prob, cutoff_top_n, blank_id, sil_id, log_input, NULL, th_output, th_timesteps, th_scores, th_out_length);
 }
 
 int paddle_beam_decode_lm(at::Tensor th_probs,
@@ -133,6 +135,7 @@ int paddle_beam_decode_lm(at::Tensor th_probs,
                           double cutoff_prob,
                           size_t cutoff_top_n,
                           size_t blank_id,
+                          int sil_id, 
                           int log_input,
                           void *scorer,
                           at::Tensor th_output,
@@ -141,7 +144,7 @@ int paddle_beam_decode_lm(at::Tensor th_probs,
                           at::Tensor th_out_length){
 
     return beam_decode(th_probs, th_seq_lens, labels, vocab_size, beam_size, num_processes, num_groups,diversity_factor,
-                cutoff_prob, cutoff_top_n, blank_id, log_input, scorer, th_output, th_timesteps, th_scores, th_out_length);
+                cutoff_prob, cutoff_top_n, blank_id, sil_id, log_input, scorer, th_output, th_timesteps, th_scores, th_out_length);
 }
 
 

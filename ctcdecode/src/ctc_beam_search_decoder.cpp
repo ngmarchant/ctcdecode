@@ -20,6 +20,7 @@ DecoderState::DecoderState(
     double cutoff_prob,
     size_t cutoff_top_n,
     size_t blank_id,
+    int sil_id,
     int log_input,
     Scorer *ext_scorer,
     size_t num_groups,
@@ -29,20 +30,12 @@ DecoderState::DecoderState(
       cutoff_prob(cutoff_prob),
       cutoff_top_n(cutoff_top_n),
       blank_id(blank_id),
+      sil_id(sil_id),
       log_input(log_input),
       vocabulary(vocabulary),
       ext_scorer(ext_scorer),
       num_groups(num_groups),
       diversity_factor(diversity_factor) {
-  // assign space id
-  auto it = std::find(vocabulary.begin(), vocabulary.end(), " ");
-  // if no space in vocabulary
-  if (it == vocabulary.end()) {
-    space_id = -2;
-  } else {
-    space_id = std::distance(vocabulary.begin(), it);
-  }
-
   group_size = beam_size / num_groups;
 
   // init prefixes' root
@@ -103,6 +96,9 @@ void DecoderState::beam_step(const std::vector<std::vector<double>> &probs_seq, 
 
     for (size_t i = 0; i < prefixes.size() && i < beam_size; ++i) {
       auto prefix = prefixes[i];
+      if (c == sil_id && prefix->character == sil_id) {
+          continue;
+      }
       if (full_beam && log_prob_c + prefix->score < min_cutoff) {
         break;
       }
@@ -132,7 +128,7 @@ void DecoderState::beam_step(const std::vector<std::vector<double>> &probs_seq, 
 
         // language model scoring
         if (ext_scorer != nullptr &&
-            (c == space_id || ext_scorer->is_character_based())) {
+            (c == sil_id || ext_scorer->is_character_based())) {
           PathTrie *prefix_to_score;
           // skip scoring the space
           if (ext_scorer->is_character_based()) {
@@ -201,7 +197,7 @@ DecoderState::decode() const {
   if (ext_scorer != nullptr && !ext_scorer->is_character_based()) {
     for (size_t i = 0; i < beam_size && i < prefixes.size(); ++i) {
       auto prefix = prefixes[i];
-      if (!prefix->is_empty() && prefix->character != space_id) {
+      if (!prefix->is_empty() && prefix->character != sil_id) {
         std::vector<std::string> ngram = ext_scorer->make_ngram(prefix);
         float score = ext_scorer->get_log_cond_prob(ngram) * ext_scorer->alpha;
         score += ext_scorer->beta;
@@ -231,12 +227,13 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
     double cutoff_prob,
     size_t cutoff_top_n,
     size_t blank_id,
+    int sil_id,
     int log_input,
     Scorer *ext_scorer,
     size_t num_groups,
     float_t diversity_factor
 ) {
-  DecoderState state(vocabulary, beam_size, cutoff_prob, cutoff_top_n, blank_id,
+  DecoderState state(vocabulary, beam_size, cutoff_prob, cutoff_top_n, blank_id, sil_id,
                      log_input, ext_scorer, num_groups, diversity_factor);
   state.next(probs_seq);
   return state.decode();
@@ -252,6 +249,7 @@ ctc_beam_search_decoder_batch(
     double cutoff_prob,
     size_t cutoff_top_n,
     size_t blank_id,
+    int sil_id,
     int log_input,
     Scorer *ext_scorer,
     size_t num_groups,
@@ -280,6 +278,7 @@ ctc_beam_search_decoder_batch(
                                   cutoff_prob,
                                   cutoff_top_n,
                                   blank_id,
+                                  sil_id,
                                   log_input,
                                   ext_scorer,
                                   num_groups,

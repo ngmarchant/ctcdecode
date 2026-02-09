@@ -23,11 +23,12 @@ class CTCBeamDecoder(object):
         diversity_factor (float): How much to prioritize exploration of the search space (vs. exploitation).
                                     Zero is equivalent to standard beam search
         blank_id (int): Index of the CTC blank token (probably 0) used when training your model.
+        sil_id (int): Index of the CTC silent token used when training your model. Defaults to -2 (no silence token).
         log_probs_input (bool): False if your model has passed through a softmax and output probabilities sum to 1.
     """
 
     def __init__(self, labels, model_path=None, alpha=0, beta=0, cutoff_top_n=40, cutoff_prob=1.0, beam_width=100,
-                 num_processes=4, num_groups=1, diversity_factor=0.5, blank_id=0, log_probs_input=False):
+                 num_processes=4, num_groups=1, diversity_factor=0.5, blank_id=0, sil_id=-2, log_probs_input=False):
         self.cutoff_top_n = cutoff_top_n
         self._beam_width = beam_width
         self._scorer = None
@@ -37,6 +38,7 @@ class CTCBeamDecoder(object):
         self._labels = list(labels)  # Ensure labels are a list
         self._num_labels = len(labels)
         self._blank_id = blank_id
+        self._sil_id = sil_id
         self._log_probs = 1 if log_probs_input else 0
         if model_path:
             self._scorer = ctc_decode.paddle_get_scorer(alpha, beta, model_path.encode(), self._labels,
@@ -79,12 +81,12 @@ class CTCBeamDecoder(object):
         out_seq_len = torch.zeros(batch_size, self._beam_width).cpu().int()
         if self._scorer:
             ctc_decode.paddle_beam_decode_lm(probs, seq_lens, self._labels, self._num_labels, self._beam_width,
-                                             self._num_processes, self._num_groups, self._diversity_factor, self._cutoff_prob, self.cutoff_top_n, self._blank_id,
+                                             self._num_processes, self._num_groups, self._diversity_factor, self._cutoff_prob, self.cutoff_top_n, self._blank_id, self._sil_id,
                                              self._log_probs, self._scorer, output, timesteps, scores, out_seq_len)
         else:
             ctc_decode.paddle_beam_decode(probs, seq_lens, self._labels, self._num_labels, self._beam_width,
                                           self._num_processes, self._num_groups, self._diversity_factor,
-                                          self._cutoff_prob, self.cutoff_top_n, self._blank_id, self._log_probs,
+                                          self._cutoff_prob, self.cutoff_top_n, self._blank_id, self._sil_id, self._log_probs,
                                           output, timesteps, scores, out_seq_len)
 
         return output, scores, timesteps, out_seq_len

@@ -32,6 +32,7 @@ std::vector<std::pair<double, Output>> ctc_beam_search_decoder(
     double cutoff_prob = 1.0,
     size_t cutoff_top_n = 40,
     size_t blank_id = 0,
+    int sil_id = -2, 
     int log_input = 0,
     Scorer *ext_scorer = nullptr,
     size_t num_groups = 1,
@@ -64,6 +65,7 @@ ctc_beam_search_decoder_batch(
     double cutoff_prob = 1.0,
     size_t cutoff_top_n = 40,
     size_t blank_id = 0,
+    int sil_id = -2,
     int log_input = 0,
     Scorer *ext_scorer = nullptr,
     size_t num_groups = 1,
@@ -77,6 +79,7 @@ class DecoderState {
   double cutoff_prob;
   size_t cutoff_top_n;
   size_t blank_id;
+  int sil_id;
   int log_input;
   std::vector<std::string> vocabulary;
   Scorer *ext_scorer;
@@ -99,7 +102,7 @@ public:
    *                 Default null, decoding the input sample without scorer.
   */
   DecoderState(const std::vector<std::string> &vocabulary, size_t beam_size, double cutoff_prob,
-               size_t cutoff_top_n, size_t blank_id, int log_input, Scorer *ext_scorer, size_t num_groups,
+               size_t cutoff_top_n, size_t blank_id, int sil_id, int log_input, Scorer *ext_scorer, size_t num_groups,
                float_t diversity_factor);
 
   ~DecoderState();
