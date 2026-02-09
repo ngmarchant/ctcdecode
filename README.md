@@ -12,7 +12,6 @@ KenLM language modeling support is also optionally included, and enabled by defa
 The below installation also works for Google Colab.
 
 ```bash
-git submodule update --remote --merge
 cd ctcdecode && pip install .
 ```
 

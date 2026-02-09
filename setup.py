@@ -1,118 +1,204 @@
-#!/usr/bin/env python
-import glob
-import multiprocessing.pool
 import os
+import glob
 import tarfile
+import zipfile
+import tempfile
 import urllib.request
-import warnings
-
-from setuptools import setup, find_packages, distutils
+import hashlib
+from setuptools import setup, find_packages
 from torch.utils.cpp_extension import BuildExtension, CppExtension, include_paths
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 
-def download_extract(url, dl_path):
-    if not os.path.isfile(dl_path):
-        # Already downloaded
-        urllib.request.urlretrieve(url, dl_path)
-    if dl_path.endswith(".tar.gz") and os.path.isdir(dl_path[:-len(".tar.gz")]):
-        # Already extracted
-        return
-    tar = tarfile.open(dl_path)
-    tar.extractall('third_party/')
-    tar.close()
+@dataclass
+class Dependency:
+    name: str
+    url: str
+    sha256: str
+    extract_path: Optional[str] = None
+    include_paths: List[str] = field(default_factory=lambda: ["."])
+    source_globs: List[str] = field(default_factory=list)
+    exclude_patterns: List[str] = field(default_factory=list)
 
 
-# Download/Extract openfst, boost
-download_extract('https://github.com/parlance/ctcdecode/releases/download/v1.0/openfst-1.6.7.tar.gz',
-                 'third_party/openfst-1.6.7.tar.gz')
-download_extract('https://github.com/parlance/ctcdecode/releases/download/v1.0/boost_1_67_0.tar.gz',
-                 'third_party/boost_1_67_0.tar.gz')
-
-for file in ['third_party/kenlm/setup.py', 'third_party/ThreadPool/ThreadPool.h']:
-    if not os.path.exists(file):
-        warnings.warn('File `{}` does not appear to be present. Did you forget `git submodule update`?'.format(file))
-
-
-# Does gcc compile with this header and library?
-def compile_test(header, library):
-    dummy_path = os.path.join(os.path.dirname(__file__), "dummy")
-    command = "bash -c \"g++ -include " + header + " -l" + library + " -x c++ - <<<'int main() {}' -o " + dummy_path \
-              + " >/dev/null 2>/dev/null && rm " + dummy_path + " 2>/dev/null\""
-    return os.system(command) == 0
-
-
-# TODO: -g is the debug flag, remove it once decoder is stable
-compile_args = ['-O3', '-DKENLM_MAX_ORDER=6', '-std=c++17', '-fPIC']
-ext_libs = []
-if compile_test('zlib.h', 'z'):
-    compile_args.append('-DHAVE_ZLIB')
-    ext_libs.append('z')
-
-if compile_test('bzlib.h', 'bz2'):
-    compile_args.append('-DHAVE_BZLIB')
-    ext_libs.append('bz2')
-
-if compile_test('lzma.h', 'lzma'):
-    compile_args.append('-DHAVE_XZLIB')
-    ext_libs.append('lzma')
-
-third_party_libs = ["kenlm", "openfst-1.6.7/src/include", "ThreadPool", "boost_1_67_0", "utf8"]
-compile_args.extend(['-DINCLUDE_KENLM', '-DKENLM_MAX_ORDER=6'])
-lib_sources = glob.glob('third_party/kenlm/util/*.cc') + glob.glob('third_party/kenlm/lm/*.cc') + glob.glob(
-    'third_party/kenlm/util/double-conversion/*.cc') + glob.glob('third_party/openfst-1.6.7/src/lib/*.cc')
-lib_sources = [fn for fn in lib_sources if not (fn.endswith('main.cc') or fn.endswith('test.cc'))]
-
-third_party_includes = [os.path.realpath(os.path.join("third_party", lib)) for lib in third_party_libs]
-ctc_sources = glob.glob('ctcdecode/src/*.cpp')
-
-extension = CppExtension(
-    name='ctcdecode._ext.ctc_decode',
-    package=True,
-    with_cuda=False,
-    sources=ctc_sources + lib_sources,
-    include_dirs=third_party_includes + include_paths(),
-    libraries=ext_libs,
-    extra_compile_args=compile_args,
-    language='c++'
-)
+DEPENDENCIES = [
+    Dependency(
+        name="openfst",
+        url="https://github.com/weimeng23/openfst/archive/refs/tags/1.8.4.zip",
+        sha256="1dc6b2afd4cb4255d41d1d558d9677b9fb9451c3932ea385f9d480170a9b8e4b",
+        extract_path="openfst-1.8.4",
+        include_paths=["src/include"],
+        source_globs=["src/lib/*.cc"]
+    ),
+    Dependency(
+        name="boost",
+        url="https://archives.boost.io/release/1.82.0/source/boost_1_82_0.tar.gz",
+        sha256="66a469b6e608a51f8347236f4912e27dc5c60c60d7d53ae9bfe4683316c6f04c",
+        extract_path="boost_1_82_0",
+        include_paths=["."]
+    ),
+    Dependency(
+        name="kenlm",
+        url="https://github.com/kpu/kenlm/archive/4cb443e60b7bf2c0ddf3c745378f76cb59e254e5.zip",
+        sha256="eea5d0f70513ad6664fb7861bd55af888cbc967eef289a0429f52396f1808a59",
+        extract_path="kenlm-4cb443e60b7bf2c0ddf3c745378f76cb59e254e5",
+        include_paths=["."], # Kenlm uses includes like "util/..." so root is needed
+        source_globs=[
+            "util/*.cc", 
+            "lm/*.cc", 
+            "util/double-conversion/*.cc"
+        ],
+        exclude_patterns=["main.cc", "test.cc"]
+    ),
+    Dependency(
+        name="threadpool",
+        url="https://github.com/progschj/ThreadPool/archive/9a42ec1329f259a5f4881a291db1dcb8f2ad9040.zip",
+        sha256="18854bb7ecc1fc9d7dda9c798a1ef0c81c2dd331d730c76c75f648189fa0c20f",
+        extract_path="ThreadPool-9a42ec1329f259a5f4881a291db1dcb8f2ad9040",
+        include_paths=["."]
+    ),
+    Dependency(
+        name="utfcpp",
+        url="https://github.com/nemtrif/utfcpp/archive/refs/tags/v4.0.9.zip",
+        sha256="73802895d0cf7b000cdf8e6ee5d69b963a829d4ea419562afd8f190adef87d5f",
+        extract_path="utfcpp-4.0.9",
+        include_paths=["source"]
+    )
+]
 
 
-# monkey-patch for parallel compilation
-# See: https://stackoverflow.com/a/13176803
-def parallelCCompile(self,
-                     sources,
-                     output_dir=None,
-                     macros=None,
-                     include_dirs=None,
-                     debug=0,
-                     extra_preargs=None,
-                     extra_postargs=None,
-                     depends=None):
-    # those lines are copied from distutils.ccompiler.CCompiler directly
-    macros, objects, extra_postargs, pp_opts, build = self._setup_compile(
-        output_dir, macros, include_dirs, sources, depends, extra_postargs)
-    cc_args = self._get_cc_args(pp_opts, debug, extra_preargs)
-    
-    # parallel code
-    def _single_compile(obj):
-        try:
-            src, ext = build[obj]
-        except KeyError:
-            return
-        self._compile(obj, src, ext, cc_args, extra_postargs, pp_opts)
+class CustomBuildExtension(BuildExtension):
+    """
+    A custom build command that:
+    1. Creates a temporary directory.
+    2. Downloads and extracts C++ dependencies there.
+    3. Updates the C++ extension sources/includes to point to the temp dir.
+    4. Performs compiler checks using the active compiler.
+    """
 
-    # convert to list, imap is evaluated on-demand
-    thread_pool = multiprocessing.pool.ThreadPool(os.cpu_count())
-    list(thread_pool.imap(_single_compile, objects))
-    return objects
+    def build_extensions(self):
+        with tempfile.TemporaryDirectory() as temp_dir:            
+            self._prepare_dependencies(temp_dir)
+            # Inject paths into the extension, assuming there is only one
+            ext = self.extensions[0]
+            self._update_extension_paths(ext, temp_dir)
+            self._configure_compression_libs(ext)
+            super().build_extensions()
 
+    def _prepare_dependencies(self, base_dir: str) -> None:
+        for dep in DEPENDENCIES:
+            filename = dep.url.split('/')[-1]
+            download_target = os.path.join(base_dir, filename)
+            
+            print(f"[{dep.name}] Downloading...")
+            urllib.request.urlretrieve(dep.url, download_target)
 
-# hack compile to support parallel compiling
-distutils.ccompiler.CCompiler.compile = parallelCCompile
+            print(f"[{dep.name}] Verifying SHA256...")
+            if not self._verify_checksum(download_target, dep.sha256):
+                raise ValueError(
+                    f"Checksum mismatch for {dep.name}.\n"
+                    f"File: {dep.url}\n"
+                    f"Expected: {dep.sha256}"
+                )
+
+            print(f"[{dep.name}] Extracting...")
+            if filename.endswith('.zip'):
+                with zipfile.ZipFile(download_target, 'r') as z:
+                    z.extractall(base_dir)
+            elif filename.endswith('.tar.gz') or filename.endswith('.tgz'):
+                with tarfile.open(download_target, 'r') as t:
+                    t.extractall(base_dir)
+
+    def _verify_checksum(self, file_path: str, expected_hash: str) -> bool:
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            # Read in 64kb chunks to avoid memory issues with large files
+            for byte_block in iter(lambda: f.read(65536), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest() == expected_hash
+
+    def _update_extension_paths(self, ext, base_dir):
+        for dep in DEPENDENCIES:
+            root_dir = os.path.join(base_dir, dep.extract_path)
+
+            if not os.path.exists(root_dir):
+                raise FileNotFoundError(f"Expected extracted directory not found: {root_dir}. "
+                                        f"Check if 'extract_path' matches the archive structure.")
+
+            for inc_path in dep.include_paths:
+                ext.include_dirs.append(os.path.join(root_dir, inc_path))
+
+            for glob_pattern in dep.source_globs:
+                # Resolve full glob path: /tmp/xyz/kenlm-master/util/*.cc
+                full_pattern = os.path.join(root_dir, glob_pattern)
+                found_files = glob.glob(full_pattern)
+                
+                if dep.exclude_patterns:
+                    found_files = [
+                        f for f in found_files 
+                        if not any(f.endswith(exclude) for exclude in dep.exclude_patterns)
+                    ]
+                
+                ext.sources.extend(found_files)
+
+    def _configure_compression_libs(self, ext):
+        """
+        Uses the active compiler to check if headers exist.
+        """
+        compiler = self.compiler
+        
+        def has_header(header_name):
+            try:
+                # Try to compile a trivial file that includes the header
+                with tempfile.NamedTemporaryFile('w', suffix='.cpp', delete=False) as f:
+                    f.write(f"#include <{header_name}>\nint main() {{ return 0; }}")
+                    fname = f.name
+                
+                # Try to compile
+                try:
+                    # compiler.compile returns a list of objects on success
+                    compiler.compile([fname], output_dir=os.path.dirname(fname))
+                    return True
+                except Exception:
+                    return False
+                finally:
+                    # Cleanup dummy files
+                    if os.path.exists(fname): os.remove(fname)
+                    # Cleanup object file (compiler adds .o or .obj)
+                    obj_name = fname.replace('.cpp', '.o').replace('.cpp', '.obj')
+                    if os.path.exists(obj_name): os.remove(obj_name)
+            except Exception:
+                return False
+
+        if has_header("zlib.h"):
+            print("Found zlib.h, enabling ZLIB support.")
+            ext.extra_compile_args.append('-DHAVE_ZLIB')
+            ext.libraries.append('z')
+        
+        if has_header("bzlib.h"):
+            print("Found bzlib.h, enabling BZ2 support.")
+            ext.extra_compile_args.append('-DHAVE_BZLIB')
+            ext.libraries.append('bz2')
+            
+        if has_header("lzma.h"):
+            print("Found lzma.h, enabling LZMA support.")
+            ext.extra_compile_args.append('-DHAVE_XZLIB')
+            ext.libraries.append('lzma')
+
 
 setup(
-    # Exclude the build files.
-    packages=find_packages(exclude=["build"]),
-    ext_modules=[extension],
-    cmdclass={'build_ext': BuildExtension}
+    packages=find_packages(exclude=["build", "third_party", "tests"]),
+    ext_modules=[
+        CppExtension(
+            name='ctcdecode._ext.ctc_decode',
+            package=True,
+            with_cuda=False, 
+            # We populate sources/includes dynamically in CustomBuildExtension
+            sources=glob.glob('ctcdecode/src/*.cpp'), 
+            include_dirs=include_paths(),
+            extra_compile_args=['-O3', '-DKENLM_MAX_ORDER=6', '-std=c++17', '-fPIC', '-DINCLUDE_KENLM']
+        )
+    ],
+    cmdclass={'build_ext': CustomBuildExtension}
 )
